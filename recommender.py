@@ -11,34 +11,24 @@ import time
 _MODEL = None
 
 
-def _load_model_if_needed() -> None:
-    """
-    Loads the recommendation model into the global _MODEL variable.
+def _load_models_if_needed() -> None:
+    global _ITEM_IDS, _ITEM_VECS, _DF_META, _DF_USER
 
-    This is called lazily on first request in a given Cloud Run instance.
-    """
-    global _MODEL
-    if _MODEL is not None:
+    if _ITEM_IDS is not None:
         return
 
-    # TODO: remplacer ce bloc par un chargement réel du modèle.
-    # Exemple avec un modèle local:
-    #   from pathlib import Path
-    #   model_path = Path(__file__).parent / "models" / "my_model.joblib"
-    #   _MODEL = load(model_path)
-    #
-    # Exemple avec Cloud Storage:
-    #   from google.cloud import storage
-    #   client = storage.Client()
-    #   bucket = client.bucket(MODEL_BUCKET)
-    #   blob = bucket.blob(MODEL_BLOB_NAME)
-    #   blob.download_to_filename("/tmp/my_model.joblib")
-    #   _MODEL = load("/tmp/my_model.joblib")
+    base_path = Path(__file__).parent / "models"
+    emb_dir = base_path / "embeddings"
+    meta_dir = base_path / "meta"
+    user_dir = base_path / "user"
 
-    # Mock model for now
-    print("Loading mock recommendation model...")
-    time.sleep(0.1)  # simulate load time
-    _MODEL = {"name": "mock_model", "version": "v1"}
+    _ITEM_IDS = np.load(emb_dir / "item_ids.npy", allow_pickle=True)
+    _ITEM_VECS = np.load(emb_dir / "item_vecs.npy")
+
+    _DF_META = pd.read_pickle(meta_dir / "df_meta.pkl")
+    _DF_USER = pd.read_pickle(user_dir / "df_user.pkl")
+
+    print("Models loaded in memory (embeddings + meta + user).")
 
 
 def get_recommendations(input_data: Dict[str, Any]) -> List[Dict[str, Any]]:
