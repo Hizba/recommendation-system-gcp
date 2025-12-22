@@ -33,26 +33,19 @@ def _load_models_if_needed() -> None:
 
 def get_recommendations(input_data: Dict[str, Any]) -> List[Dict[str, Any]]:
     """
-    Core business logic for computing recommendations.
-
-    Args:
-        input_data: dict containing "user_id" and/or "item_id".
-
-    Returns:
-        A list of dicts: [{"item_id": str, "score": float}, ...]
+    Utilise recommend_top_k_weighted pour renvoyer les vrais IDs d'articles (ar_ID).
     """
-    _load_model_if_needed()
-
     user_id = input_data.get("user_id")
-    item_id = input_data.get("item_id")
+    if user_id is None:
+        return []
 
-    # Simple mock logic: generate deterministic dummy results
-    base_id = f"user-{user_id}" if user_id is not None else f"item-{item_id}"
+    k = int(input_data.get("k", 3))
 
-    recommendations = [
-        {"item_id": f"{base_id}-rec-1", "score": 0.92},
-        {"item_id": f"{base_id}-rec-2", "score": 0.87},
-        {"item_id": f"{base_id}-rec-3", "score": 0.81},
+    # DF avec colonnes ["ar_ID", "score"]
+    recs_df = recommend_top_k_weighted(user_id=user_id, df_user=_DF_USER, df_meta=_DF_META, emb_df=None, k=k)
+
+    # On renvoie les IDs d'articles tels quels
+    return [
+        {"item_id": str(row["ar_ID"]), "score": float(row["score"])}
+        for _, row in recs_df.iterrows()
     ]
-
-    return recommendations
