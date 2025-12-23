@@ -54,6 +54,6 @@ def recommend(request) -> Response:
         return response_body, 200, headers
 
     except Exception as e:
-        # Simple logging for debugging (visible in Cloud Logging)
-        print(f"Error in recommend(): {e}")
+        print("Error in recommend():", e)
+        traceback.print_exc()
         return _error_response("Erreur interne du système de recommandation.", 500)
