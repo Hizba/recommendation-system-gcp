@@ -17,3 +17,5 @@ joblib>=1.3.0
 
 # (Optionnel) requests si tu testes des appels HTTP depuis la fonction elle-même
 # requests>=2.32.0
+
+google-cloud-storage>=2.0.0

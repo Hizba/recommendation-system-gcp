@@ -6,6 +6,9 @@ import pandas as pd
 from sklearn.metrics.pairwise import cosine_similarity
 from surprise import AlgoBase
 import joblib
+from google.cloud import storage
+import os
+
 
 # ==============================
 # 1) Variables globales
@@ -17,6 +20,14 @@ _DF_META = None
 _DF_USER = None
 _CF_MODEL = None        # modèle Surprise (SVD entraîné)
 _CF_RATINGS_DF = None   # DataFrame ratings_df (user_id, article_id, rating)
+# Config GCS pour le modèle collaboratif
+_GCS_BUCKET_NAME = os.getenv("CF_MODELS_BUCKET", "projet-9-481708-models")
+_GCS_SVD_PATH = os.getenv("CF_SVD_BLOB", "collab/svd_model.joblib")
+_GCS_RATINGS_PATH = os.getenv("CF_RATINGS_BLOB", "collab/ratings_df.pkl")
+
+_GCS_DOWNLOADED_SVD = "/tmp/svd_model.joblib"
+_GCS_DOWNLOADED_RATINGS = "/tmp/ratings_df.pkl"
+
 
 # ==============================
 # 2) Chargement des modèles
@@ -25,22 +36,31 @@ _CF_RATINGS_DF = None   # DataFrame ratings_df (user_id, article_id, rating)
 def _load_models_if_needed() -> None:
     """
     Charge en mémoire :
-      - modèle collaboratif (_CF_MODEL) + ratings_df (_CF_RATINGS_DF)
-      - modèles content-based : _ITEM_IDS, _ITEM_VECS, _DF_META, _DF_USER
+      - modèle collaboratif (_CF_MODEL) + ratings_df (_CF_RATINGS_DF) depuis Cloud Storage
+      - modèles content-based : _ITEM_IDS, _ITEM_VECS, _DF_META, _DF_USER depuis le dossier models/
     """
     global _ITEM_IDS, _ITEM_VECS, _DF_META, _DF_USER
     global _CF_MODEL, _CF_RATINGS_DF
 
-    # 1) Modèle collaboratif
+    # 1) Modèle collaboratif depuis GCS
     if _CF_MODEL is None or _CF_RATINGS_DF is None:
-        cf_base_path = Path(__file__).parent / "models" / "collaborative"
+        client = storage.Client()
+        bucket = client.bucket(_GCS_BUCKET_NAME)
 
-        _CF_MODEL = joblib.load(cf_base_path / "svd_model.joblib")
-        _CF_RATINGS_DF = pd.read_pickle(cf_base_path / "ratings_df.pkl")
+        # Télécharger le modèle SVD
+        blob_model = bucket.blob(_GCS_SVD_PATH)
+        blob_model.download_to_filename(_GCS_DOWNLOADED_SVD)
 
-        print("Collaborative model (SVD) and ratings_df loaded.")
+        # Télécharger ratings_df
+        blob_ratings = bucket.blob(_GCS_RATINGS_PATH)
+        blob_ratings.download_to_filename(_GCS_DOWNLOADED_RATINGS)
 
-    # 2) Modèles content-based
+        _CF_MODEL = joblib.load(_GCS_DOWNLOADED_SVD)
+        _CF_RATINGS_DF = pd.read_pickle(_GCS_DOWNLOADED_RATINGS)
+
+        print("Collaborative model (SVD) and ratings_df loaded from GCS.")
+
+    # 2) Modèles content-based (toujours depuis le disque local du container)
     if _ITEM_IDS is None or _ITEM_VECS is None or _DF_META is None or _DF_USER is None:
         base_path = Path(__file__).parent / "models"
         emb_dir = base_path / "embeddings"
@@ -54,6 +74,7 @@ def _load_models_if_needed() -> None:
         _DF_USER = pd.read_pickle(user_dir / "df_user.pkl")
 
         print("Content-based models loaded (embeddings + meta + user).")
+
 
 # ==============================
 # 3) Content-based pondéré
