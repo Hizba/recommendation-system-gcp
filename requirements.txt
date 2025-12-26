@@ -1,6 +1,19 @@
+# Framework fonction HTTP
 functions-framework==3.*
+
+# HTTP runtime (utilisé par Functions Framework)
 Werkzeug>=3.0.0
-# Dépendances ML minimales, à adapter selon ton modèle
+
+# NumPy / Pandas / Scikit-learn
 numpy>=1.26.0
 pandas>=2.0.0
 scikit-learn>=1.3.0
+
+# Collaborative filtering (Surprise)
+scikit-surprise>=1.1.3
+
+# Sauvegarde / chargement des modèles
+joblib>=1.3.0
+
+# (Optionnel) requests si tu testes des appels HTTP depuis la fonction elle-même
+# requests>=2.32.0

@@ -4,7 +4,8 @@ from typing import Any, Dict, List
 import numpy as np
 import pandas as pd
 from sklearn.metrics.pairwise import cosine_similarity
-
+from surprise import AlgoBase
+import joblib
 
 # ==============================
 # 1) Variables globales
@@ -14,34 +15,45 @@ _ITEM_IDS = None
 _ITEM_VECS = None
 _DF_META = None
 _DF_USER = None
-
+_CF_MODEL = None        # modèle Surprise (SVD entraîné)
+_CF_RATINGS_DF = None   # DataFrame ratings_df (user_id, article_id, rating)
 
 # ==============================
 # 2) Chargement des modèles
 # ==============================
 
 def _load_models_if_needed() -> None:
-    """Charge item_ids, item_vecs, df_meta, df_user depuis le dossier models/."""
+    """
+    Charge en mémoire :
+      - modèle collaboratif (_CF_MODEL) + ratings_df (_CF_RATINGS_DF)
+      - modèles content-based : _ITEM_IDS, _ITEM_VECS, _DF_META, _DF_USER
+    """
     global _ITEM_IDS, _ITEM_VECS, _DF_META, _DF_USER
+    global _CF_MODEL, _CF_RATINGS_DF
 
-    if _ITEM_IDS is not None:
-        return  # déjà chargé
+    # 1) Modèle collaboratif
+    if _CF_MODEL is None or _CF_RATINGS_DF is None:
+        cf_base_path = Path(__file__).parent / "models" / "collaborative"
 
-    base_path = Path(__file__).parent / "models"
-    emb_dir = base_path / "embeddings"
-    meta_dir = base_path / "meta"
-    user_dir = base_path / "user"
+        _CF_MODEL = joblib.load(cf_base_path / "svd_model.joblib")
+        _CF_RATINGS_DF = pd.read_pickle(cf_base_path / "ratings_df.pkl")
 
-    # Embeddings
-    _ITEM_IDS = np.load(emb_dir / "item_ids.npy", allow_pickle=True)
-    _ITEM_VECS = np.load(emb_dir / "item_vecs.npy")
+        print("Collaborative model (SVD) and ratings_df loaded.")
 
-    # Meta et user (version pickle)
-    _DF_META = pd.read_pickle(meta_dir / "df_meta.pkl")
-    _DF_USER = pd.read_pickle(user_dir / "df_user.pkl")
+    # 2) Modèles content-based
+    if _ITEM_IDS is None or _ITEM_VECS is None or _DF_META is None or _DF_USER is None:
+        base_path = Path(__file__).parent / "models"
+        emb_dir = base_path / "embeddings"
+        meta_dir = base_path / "meta"
+        user_dir = base_path / "user"
 
-    print("Models loaded in memory (embeddings + meta + user).")
+        _ITEM_IDS = np.load(emb_dir / "item_ids.npy", allow_pickle=True)
+        _ITEM_VECS = np.load(emb_dir / "item_vecs.npy")
 
+        _DF_META = pd.read_pickle(meta_dir / "df_meta.pkl")
+        _DF_USER = pd.read_pickle(user_dir / "df_user.pkl")
+
+        print("Content-based models loaded (embeddings + meta + user).")
 
 # ==============================
 # 3) Content-based pondéré
@@ -96,7 +108,6 @@ def build_user_profile_from_meta(user_id: int) -> np.ndarray | None:
     profile = (vecs * weights).sum(axis=0) / weights.sum()
     return profile
 
-
 def recommend_top_k_weighted(
     user_id: int,
     k: int = 3,
@@ -139,27 +150,86 @@ def recommend_top_k_weighted(
         }
     )
 
+# ==============================
+# 4) Collaborative filtering
+# ==============================
+
+def recommend_top_k_collaborative(user_id: int, k: int = 5) -> pd.DataFrame:
+    """
+    Recommandations top-k avec le modèle collaboratif Surprise (SVD).
+    Retourne un DataFrame ["article_id", "score"] pour ce user.
+    """
+    _load_models_if_needed()
+
+    model: AlgoBase = _CF_MODEL
+    ratings_df = _CF_RATINGS_DF
+
+    # Items déjà vus par ce user
+    user_rows = ratings_df[ratings_df["user_id"] == user_id]
+    if user_rows.empty:
+        # user inconnu du modèle => on renvoie un DF vide (ou on bascule sur content-based)
+        return pd.DataFrame(columns=["article_id", "score"])
+
+    seen_items = set(user_rows["article_id"].unique())
+
+    # Tous les items possibles
+    all_items = ratings_df["article_id"].unique()
+
+    # Candidats = items non vus
+    candidates = [i for i in all_items if i not in seen_items]
+
+    if not candidates:
+        return pd.DataFrame(columns=["article_id", "score"])
+
+    # Prédire les notes pour chaque item candidat
+    preds = []
+    for i in candidates:
+        est = model.predict(str(user_id), str(i)).est
+        preds.append((i, est))
+
+    # Top-k
+    preds_sorted = sorted(preds, key=lambda x: x[1], reverse=True)[:k]
+
+    return pd.DataFrame(
+        {
+            "article_id": [i for i, _ in preds_sorted],
+            "score": [est for _, est in preds_sorted],
+        }
+    )
 
 # ==============================
-# 4) Interface pour main.py
+# 5) Interface pour main.py
 # ==============================
 
 def get_recommendations(input_data: Dict[str, Any]) -> List[Dict[str, Any]]:
     """
     Fonction appelée par main.py.
-    input_data doit contenir au minimum "user_id" (et éventuellement "k").
-    """
-    _load_models_if_needed()
 
+    input_data:
+      - "user_id": int (obligatoire)
+      - "k": int (optionnel, défaut=3)
+      - "mode": "content_based" ou "collab" (optionnel, défaut="content_based")
+    """
     user_id = input_data.get("user_id")
     if user_id is None:
         return []
 
-    k = int(input_data.get("k", 3))
+    k = int(input_data.get("k", 5))
+    mode = input_data.get("mode", "content_based")
 
-    recs_df = recommend_top_k_weighted(user_id=user_id, k=k)
+    if mode == "collab":
+        # Collaborative filtering
+        recs_df = recommend_top_k_collaborative(user_id=user_id, k=k)
+        id_col = "article_id"
+    else:
+        # Content-based pondéré (mode par défaut)
+        recs_df = recommend_top_k_weighted(user_id=user_id, k=k)
+        id_col = "ar_ID"
+
+    if recs_df.empty:
+        return []
 
     return [
-        {"item_id": str(row["ar_ID"]), "score": float(row["score"])}
+        {"item_id": str(row[id_col]), "score": float(row["score"])}
         for _, row in recs_df.iterrows()
     ]
