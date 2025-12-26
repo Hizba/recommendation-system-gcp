@@ -4,7 +4,7 @@ from typing import Any, Dict, List
 import numpy as np
 import pandas as pd
 from sklearn.metrics.pairwise import cosine_similarity
-from surprise import AlgoBase
+# from surprise import AlgoBase
 import joblib
 from google.cloud import storage
 import os
@@ -182,7 +182,7 @@ def recommend_top_k_collaborative(user_id: int, k: int = 5) -> pd.DataFrame:
     """
     _load_models_if_needed()
 
-    model: AlgoBase = _CF_MODEL
+    model = _CF_MODEL
     ratings_df = _CF_RATINGS_DF
 
     # Items déjà vus par ce user
