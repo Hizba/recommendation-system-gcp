@@ -47,6 +47,10 @@ def _load_models_if_needed() -> None:
         client = storage.Client()
         bucket = client.bucket(_GCS_BUCKET_NAME)
 
+        print("GCS bucket:", _GCS_BUCKET_NAME)
+        print("GCS SVD path:", _GCS_SVD_PATH)
+        print("GCS ratings path:", _GCS_RATINGS_PATH)
+
         # Télécharger le modèle SVD
         blob_model = bucket.blob(_GCS_SVD_PATH)
         blob_model.download_to_filename(_GCS_DOWNLOADED_SVD)
@@ -54,6 +58,11 @@ def _load_models_if_needed() -> None:
         # Télécharger ratings_df
         blob_ratings = bucket.blob(_GCS_RATINGS_PATH)
         blob_ratings.download_to_filename(_GCS_DOWNLOADED_RATINGS)
+
+        print("Local SVD path:", _GCS_DOWNLOADED_SVD)
+        print("Local ratings path:", _GCS_DOWNLOADED_RATINGS)
+        print("Local SVD size:", os.path.getsize(_GCS_DOWNLOADED_SVD))
+        print("Local ratings size:", os.path.getsize(_GCS_DOWNLOADED_RATINGS))
 
         _CF_MODEL = joblib.load(_GCS_DOWNLOADED_SVD)
         _CF_RATINGS_DF = pd.read_pickle(_GCS_DOWNLOADED_RATINGS)
