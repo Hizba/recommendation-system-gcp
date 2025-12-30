@@ -49,3 +49,4 @@ def recommend(request):
         print(f"Error in recommend(): {e}")
         traceback.print_exc()
         return _error_response("Erreur interne du système de recommandation.", 500)
+ 

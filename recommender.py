@@ -46,7 +46,7 @@ def _load_models_if_needed() -> None:
 
     print("Content-based models loaded (embeddings + meta + user).")
 
-
+ 
 # ==============================
 # 3) Content-based pondéré
 # ==============================
