@@ -45,8 +45,6 @@ def _load_models_if_needed() -> None:
     _DF_USER = pd.read_pickle(user_dir / "df_user.pkl")
 
     print("Content-based models loaded (embeddings + meta + user).")
-
- 
 # ==============================
 # 3) Content-based pondéré
 # ==============================
