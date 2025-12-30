@@ -2,7 +2,6 @@ import json
 from typing import Any, Dict, Tuple
 
 import functions_framework
-
 from recommender import get_recommendations
 
 
@@ -15,16 +14,14 @@ def _error_response(message: str, status_code: int) -> Tuple[str, int, Dict[str,
 @functions_framework.http
 def recommend(request):
     """
-    HTTP Cloud Run function pour les recommandations.
+    HTTP Cloud Function pour les recommandations content-based.
 
     Body JSON attendu :
       {
-        "user_id": 82705,      # obligatoire
-        "k": 10,               # optionnel (défaut 3)
-        "mode": "content_based" ou "collab"  # optionnel (défaut "content_based")
+        "user_id": 82705,   # obligatoire
+        "k": 10             # optionnel (défaut 3)
       }
     """
-    # Lire le JSON
     data = request.get_json(silent=True)
     if data is None:
         return _error_response("Requête JSON manquante ou invalide.", 400)
@@ -33,15 +30,14 @@ def recommend(request):
     if user_id is None:
         return _error_response("Champ 'user_id' requis dans le corps JSON.", 400)
 
-    # Construire le payload pour la couche reco
     input_payload: Dict[str, Any] = {
         "user_id": user_id,
         "k": data.get("k", 5),
-        "mode": data.get("mode", "content_based"),
+        # on force le mode content-based pour cette branche
+        "mode": "content_based",
     }
 
     try:
-        # Appel de la logique métier
         recommendations = get_recommendations(input_payload)
 
         response_body = json.dumps({"recommendations": recommendations})
@@ -49,9 +45,7 @@ def recommend(request):
         return response_body, 200, headers
 
     except Exception as e:
-        # Log minimal visible dans Cloud Logging
         import traceback
         print(f"Error in recommend(): {e}")
         traceback.print_exc()
-
         return _error_response("Erreur interne du système de recommandation.", 500)
